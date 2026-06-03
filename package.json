@@ -1,0 +1,38 @@
+{
+  "name": "shapewords-mcp",
+  "version": "0.1.0",
+  "description": "Universal MCP server for generating ShapeWords word clouds.",
+  "type": "module",
+  "bin": {
+    "shapewords-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "inspect": "npx @modelcontextprotocol/inspector node src/index.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kirrrr-2423/shapewords-mcp.git"
+  },
+  "homepage": "https://shapewords.fun/",
+  "bugs": {
+    "url": "https://github.com/kirrrr-2423/shapewords-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "word-cloud",
+    "shapewords",
+    "ai-tools"
+  ],
+  "author": "ShapeWords",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
