@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { setTimeout as delay } from 'node:timers/promises'
+import { renderLocalSkiaWordCloud } from './localSkiaRenderer.js'
 
 const VERSION = '0.2.1'
 const DEFAULT_API_BASE_URL = 'https://shapewords.fun'
@@ -35,7 +36,7 @@ const CANVAS_RENDER_DEFAULTS = Object.freeze({
   background: 'white',
   quality: 'hq',
   engine: 'auto',
-  returnLayout: true,
+  returnLayout: false,
   shapeType: 'cloud',
   maxWords: 700,
   seed: 0,
@@ -55,7 +56,7 @@ const API_RENDER_DEFAULTS = Object.freeze({
   background: 'white',
   quality: 'sq',
   engine: 'auto',
-  returnLayout: true,
+  returnLayout: false,
   shapeType: 'circle',
   maxWords: 120,
   seed: 0,
@@ -90,7 +91,8 @@ const formatSchema = z.enum(['png', 'svg', 'json'])
 const backgroundSchema = z.enum(['transparent', 'white', 'dark'])
 const qualitySchema = z.enum(['sq', 'hq'])
 const colorModeSchema = z.enum(['sequential', 'random', 'byFrequency'])
-const engineSchema = z.enum(['auto', 'browser', 'browserless'])
+const engineSchema = z.enum(['auto', 'browser', 'browserless', 'skia'])
+const hostedEngineSchema = z.enum(['auto', 'browser', 'browserless'])
 const renderProfileSchema = z.enum(['canvas', 'api'])
 const fillModeSchema = z.enum(['fill', 'frequency'])
 const spiralTypeSchema = z.enum(['archimedean', 'rectangular'])
@@ -120,8 +122,8 @@ const renderOptionsShape = {
   height: z.number().int().min(240).max(4096).optional().describe('Canvas height in pixels. Canvas-profile default: 600.'),
   background: backgroundSchema.optional().describe('Output background style. Canvas-profile default: white.'),
   quality: qualitySchema.optional().describe('sq is faster, hq renders at higher device scale. Canvas-profile default: hq.'),
-  engine: engineSchema.optional().describe('Renderer engine. auto uses the browserless shared-core renderer for supported formats.'),
-  returnLayout: z.boolean().optional().describe('Ask the Render API to include layout JSON when supported. Canvas-profile default: true.'),
+  engine: engineSchema.optional().describe('Renderer engine. auto uses the hosted renderer; skia uses the local MCP shared-core + CanvasKit renderer without server-side Chromium.'),
+  returnLayout: z.boolean().optional().describe('Include layout JSON when supported. Canvas-profile default: false.'),
   shapeType: z.string().min(1).max(80).optional().describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond, custom. Canvas-profile default: cloud.'),
   customShapeDefinition: customShapeDefinitionSchema.describe('Custom SVG shape definition used when shapeType is custom.'),
   maxWords: z.number().int().min(1).max(1000).optional().describe('Maximum number of words to lay out. Canvas-profile default: 700.'),
@@ -136,6 +138,10 @@ const renderOptionsShape = {
   rotations: z.array(z.number().int().min(-90).max(90)).min(1).max(64).optional().describe('Explicit rotation angles in degrees. When provided, these override rotationPreset.'),
   spiralType: spiralTypeSchema.optional().describe('Placement spiral algorithm. Canvas-profile default: archimedean.'),
   fillMode: fillModeSchema.optional().describe('Shape filling strategy. Canvas-profile default: fill.'),
+}
+const hostedRenderOptionsShape = {
+  ...renderOptionsShape,
+  engine: hostedEngineSchema.optional().describe('Hosted renderer engine. auto uses the hosted renderer default path.'),
 }
 
 const server = new McpServer({
@@ -163,6 +169,10 @@ server.registerTool(
   },
   async (input) => {
     const payload = toRenderPayload(input)
+    if (payload.options.engine === 'skia') {
+      return renderLocalSkiaTool(input, payload)
+    }
+
     const job = await createRenderJob(payload)
     const completedJob = await waitForRenderJob(job, {
       pollIntervalMs: input.pollIntervalMs || POLL_INTERVAL_MS,
@@ -204,7 +214,7 @@ server.registerTool(
   {
     title: 'Create word cloud job',
     description: 'Start a ShapeWords render job and return status/artifact URLs without waiting for completion.',
-    inputSchema: renderOptionsShape,
+    inputSchema: hostedRenderOptionsShape,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -214,6 +224,10 @@ server.registerTool(
   },
   async (input) => {
     const payload = toRenderPayload(input)
+    if (payload.options.engine === 'skia') {
+      throw new Error('engine: "skia" is local-only and is supported by render_word_cloud, not by create_word_cloud_job.')
+    }
+
     const job = await createRenderJob(payload)
     const artifactUrl = getArtifactUrl(job)
     return {
@@ -275,6 +289,44 @@ main().catch((error) => {
   console.error(`ShapeWords MCP failed: ${error?.message || String(error)}`)
   process.exit(1)
 })
+
+async function renderLocalSkiaTool(input, payload) {
+  const rendered = await renderLocalSkiaWordCloud(payload)
+  const artifactFormat = payload.options.format
+  const localArtifact = {
+    filename: rendered.artifact.filename,
+    mimeType: rendered.artifact.mimeType,
+    width: rendered.artifact.width,
+    height: rendered.artifact.height,
+    bytes: rendered.artifact.bytes,
+  }
+  const structuredContent = {
+    job: rendered.job,
+    artifactUrl: null,
+    localArtifact,
+    siteUrl: API_BASE_URL,
+  }
+
+  const content = [
+    {
+      type: 'text',
+      text: [
+        `ShapeWords local Skia render completed: ${rendered.job.id}`,
+        'Artifact URL: local MCP artifact',
+        `Format: ${artifactFormat}`,
+        `Bytes: ${rendered.artifact.bytes}`,
+      ].join('\n'),
+    },
+  ]
+
+  if (['png', 'svg'].includes(artifactFormat)) {
+    content.push(artifactToImageContent(rendered.artifact))
+  } else if (input.returnImage) {
+    throw new Error('returnImage is supported only for png and svg formats.')
+  }
+
+  return { content, structuredContent }
+}
 
 function toRenderPayload(input) {
   const renderProfile = input.renderProfile === 'api' ? 'api' : 'canvas'
@@ -361,6 +413,19 @@ async function fetchArtifactAsImageContent(url) {
     type: 'image',
     data: bytes.toString('base64'),
     mimeType,
+  }
+}
+
+function artifactToImageContent(artifact) {
+  const bytes = artifact.data || Buffer.from(artifact.text || '', 'utf8')
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    throw new Error(`Artifact is ${bytes.length} bytes, above SHAPEWORDS_MAX_IMAGE_BYTES=${MAX_IMAGE_BYTES}.`)
+  }
+
+  return {
+    type: 'image',
+    data: Buffer.from(bytes).toString('base64'),
+    mimeType: artifact.mimeType,
   }
 }
 

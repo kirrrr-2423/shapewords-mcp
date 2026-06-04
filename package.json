@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/index.js",
     "inspect": "npx @modelcontextprotocol/inspector node src/index.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:skia": "node scripts/smoke-skia.mjs"
   },
   "repository": {
     "type": "git",
@@ -30,6 +31,9 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@napi-rs/canvas": "^1.0.0",
+    "canvaskit-wasm": "^0.41.1",
+    "fontkit": "^2.0.4",
     "zod": "^4.4.3"
   },
   "engines": {
