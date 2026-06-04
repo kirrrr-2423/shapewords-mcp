@@ -2,7 +2,7 @@
 
 Universal MCP server for generating word clouds with [ShapeWords](https://shapewords.fun/).
 
-It exposes ShapeWords Render API tools through the Model Context Protocol, so any MCP-capable client can create PNG/SVG word clouds from text, workshop notes, prompts, research snippets, or agent output.
+It exposes ShapeWords Render API tools through the Model Context Protocol, so any MCP-capable client can create SVG, JSON, or PNG word clouds from text, workshop notes, prompts, research snippets, or agent output.
 
 ## Tools
 
@@ -86,7 +86,7 @@ For a local clone:
 ## Example Prompt
 
 ```text
-Create a PNG word cloud about MCP, universal tools, word cloud generation, AI agents, and ShapeWords. Use a circle shape and return the image.
+Create a fast SVG word cloud about MCP, universal tools, word cloud generation, AI agents, and ShapeWords. Use a circle shape and return the artifact URL.
 ```
 
 Example tool input:
@@ -95,11 +95,13 @@ Example tool input:
 {
   "text": "MCP MCP MCP Model Context Protocol word cloud word cloud ShapeWords tools resources prompts stdio server client universal integration connector API render PNG SVG artifact agents automation context protocol schema",
   "locale": "en",
-  "format": "png",
-  "width": 1200,
-  "height": 800,
+  "format": "svg",
+  "width": 1024,
+  "height": 640,
   "background": "white",
   "quality": "sq",
+  "engine": "auto",
+  "returnLayout": true,
   "shapeType": "circle",
   "palette": ["#7c3aed", "#ddd6fe", "#14b8a6", "#111827"],
   "returnImage": false
@@ -119,4 +121,5 @@ The server uses stdio and writes protocol messages to stdout. Diagnostics are wr
 
 - Generated artifact URLs are short-lived because the ShapeWords Render API keeps jobs in memory.
 - Set `returnImage: true` in `render_word_cloud` when the MCP client supports image content and needs the bytes inline.
-- For automation-heavy use, prefer SVG or smaller PNG dimensions to reduce artifact size.
+- The default path is SVG/browserless for lower latency. PNG uses the browser fallback until server-side rasterization is available.
+- For automation-heavy use, prefer SVG or JSON layout artifacts; request PNG only when the caller needs raster pixels.

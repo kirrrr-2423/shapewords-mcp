@@ -28,23 +28,26 @@ try {
   const names = tools.tools.map((tool) => tool.name)
   console.log(`tools: ${names.join(', ')}`)
 
-  if (!names.includes('create_word_cloud_job')) {
-    throw new Error('create_word_cloud_job is missing.')
+  if (!names.includes('render_word_cloud')) {
+    throw new Error('render_word_cloud is missing.')
   }
 
   const result = await client.callTool({
-    name: 'create_word_cloud_job',
+    name: 'render_word_cloud',
     arguments: {
       text: 'MCP smoke test ShapeWords word cloud API render tools protocol integration',
       locale: 'en',
       format: 'svg',
-      width: 640,
-      height: 400,
+      width: 720,
+      height: 480,
       background: 'white',
       quality: 'sq',
+      engine: 'auto',
+      returnLayout: true,
       shapeType: 'circle',
       maxWords: 40,
       palette: ['#7c3aed', '#14b8a6', '#111827'],
+      returnImage: false,
     },
   })
 

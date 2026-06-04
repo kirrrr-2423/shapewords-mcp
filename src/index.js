@@ -14,21 +14,32 @@ const POLL_TIMEOUT_MS = readPositiveInteger(process.env.SHAPEWORDS_POLL_TIMEOUT_
 const MAX_IMAGE_BYTES = readPositiveInteger(process.env.SHAPEWORDS_MAX_IMAGE_BYTES, 8 * 1024 * 1024)
 
 const localeSchema = z.enum(['en', 'ru', 'ar', 'es', 'fr', 'zh'])
-const formatSchema = z.enum(['png', 'svg'])
+const formatSchema = z.enum(['png', 'svg', 'json'])
 const backgroundSchema = z.enum(['transparent', 'white', 'dark'])
 const qualitySchema = z.enum(['sq', 'hq'])
 const colorModeSchema = z.enum(['sequential', 'random', 'byFrequency'])
+const engineSchema = z.enum(['auto', 'browser', 'browserless'])
+const customShapeDefinitionSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  nameEn: z.string().min(1).max(80).optional(),
+  path: z.string().min(1).max(100_000),
+  viewBox: z.string().min(1).max(120),
+  fillRule: z.enum(['nonzero', 'evenodd']).optional(),
+}).optional()
 
 const renderOptionsShape = {
   text: z.string().min(1).max(100_000).describe('Words, phrases, notes, or source text for the word cloud.'),
   locale: localeSchema.default('en').describe('ShapeWords UI/render locale.'),
-  format: formatSchema.default('png').describe('Output artifact format.'),
-  width: z.number().int().min(240).max(4096).default(1600).describe('Canvas width in pixels.'),
-  height: z.number().int().min(240).max(4096).default(1000).describe('Canvas height in pixels.'),
-  background: backgroundSchema.default('transparent').describe('Output background style.'),
-  quality: qualitySchema.default('hq').describe('sq is faster, hq renders at higher device scale.'),
-  shapeType: z.string().min(1).max(80).default('circle').describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond.'),
-  maxWords: z.number().int().min(1).max(1000).default(300).describe('Maximum number of words to lay out.'),
+  format: formatSchema.default('svg').describe('Output artifact format. SVG is the fastest MCP default; PNG uses the browser fallback.'),
+  width: z.number().int().min(240).max(4096).default(1024).describe('Canvas width in pixels.'),
+  height: z.number().int().min(240).max(4096).default(640).describe('Canvas height in pixels.'),
+  background: backgroundSchema.default('white').describe('Output background style.'),
+  quality: qualitySchema.default('sq').describe('sq is faster, hq renders at higher device scale.'),
+  engine: engineSchema.default('auto').describe('Renderer engine. auto uses browserless for SVG/JSON and browser fallback for PNG.'),
+  returnLayout: z.boolean().default(true).describe('Ask the Render API to include layout JSON when supported.'),
+  shapeType: z.string().min(1).max(80).default('circle').describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond, custom.'),
+  customShapeDefinition: customShapeDefinitionSchema.describe('Custom SVG shape definition used when shapeType is custom.'),
+  maxWords: z.number().int().min(1).max(1000).default(120).describe('Maximum number of words to lay out.'),
   fontFamily: z.string().min(1).max(80).optional().describe('Optional ShapeWords font family name.'),
   minFontSize: z.number().int().min(4).max(400).optional(),
   maxFontSize: z.number().int().min(8).max(700).optional(),
@@ -84,6 +95,9 @@ server.registerTool(
     ]
 
     if (input.returnImage) {
+      if (!['png', 'svg'].includes(input.format || 'svg')) {
+        throw new Error('returnImage is supported only for png and svg formats.')
+      }
       const image = await fetchArtifactAsImageContent(artifactUrl)
       content.push(image)
     }
@@ -170,17 +184,19 @@ main().catch((error) => {
 
 function toRenderPayload(input) {
   const options = {
-    locale: input.locale,
-    format: input.format,
-    width: input.width,
-    height: input.height,
-    background: input.background,
-    quality: input.quality,
-    shapeType: input.shapeType,
-    maxWords: input.maxWords,
+    locale: input.locale || 'en',
+    format: input.format || 'svg',
+    width: input.width || 1024,
+    height: input.height || 640,
+    background: input.background || 'white',
+    quality: input.quality || 'sq',
+    shapeType: input.shapeType || 'circle',
+    maxWords: input.maxWords || 120,
+    engine: input.engine || 'auto',
+    returnLayout: input.returnLayout !== false,
   }
 
-  for (const key of ['fontFamily', 'minFontSize', 'maxFontSize', 'palette', 'colorMode']) {
+  for (const key of ['fontFamily', 'minFontSize', 'maxFontSize', 'palette', 'colorMode', 'customShapeDefinition']) {
     if (input[key] !== undefined) options[key] = input[key]
   }
 
