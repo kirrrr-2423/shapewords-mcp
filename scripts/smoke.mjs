@@ -19,7 +19,7 @@ if (stderr) {
 
 const client = new Client({
   name: 'shapewords-mcp-smoke',
-  version: '0.2.0',
+  version: '0.2.1',
 })
 
 try {
@@ -46,6 +46,7 @@ try {
       returnLayout: true,
       shapeType: 'circle',
       maxWords: 40,
+      seed: 12345,
       palette: ['#7c3aed', '#14b8a6', '#111827'],
       returnImage: false,
     },

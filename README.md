@@ -50,6 +50,7 @@ Use this tool with the `jobId` returned by `create_word_cloud_job` or `render_wo
 | `shapeType` | string | `cloud` | 1-80 chars | Shape id. Use a built-in id or `custom` with `customShapeDefinition`. |
 | `customShapeDefinition` | object | omitted | see below | Custom SVG path shape. Required when `shapeType` is `custom`. |
 | `maxWords` | integer | `700` | 1-1000 | Maximum number of words to place. |
+| `seed` | integer | `0` | 0-4294967295 | Unsigned 32-bit layout seed for reproducible browserless renders. Same input, options, and seed produce the same SVG/layout. |
 | `fontFamily` | string | `Montserrat` | 1-80 chars | ShapeWords font family name, for example `Inter`, `Roboto`, `Montserrat`, `Noto Sans`. |
 | `minFontSize` | integer | `18` | 4-400 | Minimum word font size. |
 | `maxFontSize` | integer | `96` | 8-700 | Maximum word font size. |
@@ -87,7 +88,7 @@ horizontal, vertical, orthogonal, crossing, crossingVoids, dancing,
 positiveSlope, negativeSlope, random, custom, mixed, angled, free
 ```
 
-`renderProfile: "canvas"` sends the same practical defaults as the main editor canvas: `shapeType: "cloud"`, `width: 800`, `height: 600`, `quality: "hq"`, `maxWords: 700`, `fontFamily: "Montserrat"`, `minFontSize: 18`, `maxFontSize: 96`, `padding: 3`, `rotationPreset: "orthogonal"`, `spiralType: "archimedean"`, and `fillMode: "fill"`.
+`renderProfile: "canvas"` sends the same practical defaults as the main editor canvas: `shapeType: "cloud"`, `width: 800`, `height: 600`, `quality: "hq"`, `maxWords: 700`, `seed: 0`, `fontFamily: "Montserrat"`, `minFontSize: 18`, `maxFontSize: 96`, `padding: 3`, `rotationPreset: "orthogonal"`, `spiralType: "archimedean"`, and `fillMode: "fill"`.
 
 Use `renderProfile: "api"` only when you need the older compact Render API defaults: circle shape, 1024x640, SQ quality, and 120 max words.
 
@@ -107,7 +108,8 @@ Example weighted text:
 {
   "text": "MCP MCP MCP ShapeWords ShapeWords word cloud word cloud render API agents tools",
   "shapeType": "cloud",
-  "format": "svg"
+  "format": "svg",
+  "seed": 12345
 }
 ```
 
@@ -205,6 +207,8 @@ Generated artifact URLs are short-lived because the ShapeWords Render API stores
 - `engine: "auto"` is recommended unless you need to force a specific path.
 - `engine: "browserless"` supports `svg`, `json`, and `png`.
 - `engine: "browser"` supports `svg` and `png`, not `json`.
+- `seed` is honored by browserless/shared-core renders. Use `engine: "auto"` or `engine: "browserless"` for reproducible API/MCP output.
+- Non-zero `seed` with forced `engine: "browser"` is rejected by the Render API because the browser fallback does not use the deterministic shared-core seed path.
 
 ## Quick Start
 
@@ -288,6 +292,7 @@ Example tool input:
   "engine": "auto",
   "returnLayout": true,
   "shapeType": "cloud",
+  "seed": 12345,
   "palette": ["#7c3aed", "#ddd6fe", "#14b8a6", "#111827"],
   "returnImage": false
 }
@@ -320,7 +325,21 @@ Example tool input:
   "engine": "browserless",
   "shapeType": "diamond",
   "returnLayout": true,
+  "seed": 7,
   "maxWords": 80
+}
+```
+
+### Reproducible SVG
+
+```json
+{
+  "text": "MCP shared core browserless renderer reproducible seed deterministic layout",
+  "format": "svg",
+  "engine": "browserless",
+  "shapeType": "cloud",
+  "returnLayout": true,
+  "seed": 12345
 }
 ```
 
@@ -351,5 +370,6 @@ The server uses stdio and writes protocol messages to stdout. Diagnostics are wr
 
 - Set `returnImage: true` in `render_word_cloud` when the MCP client supports image content and needs the bytes inline.
 - For automation-heavy use, prefer SVG or JSON layout artifacts; request PNG only when the caller needs raster pixels.
+- Set `seed` when the caller needs repeatable SVG/JSON/PNG placement across MCP runs.
 - The MCP schema currently exposes rendering and style options only. It does not expose ShapeWords UI-only workflows such as the advanced word editor, 2D/3D view switching, CSV/Excel upload, Google Sheets import, or live room controls.
 - `padding`, `rotationPreset`, `rotations`, `spiralType`, and `fillMode` are exposed so MCP callers can match the main ShapeWords canvas more closely.

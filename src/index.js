@@ -5,7 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { setTimeout as delay } from 'node:timers/promises'
 
-const VERSION = '0.2.0'
+const VERSION = '0.2.1'
 const DEFAULT_API_BASE_URL = 'https://shapewords.fun'
 const API_BASE_URL = stripTrailingSlash(process.env.SHAPEWORDS_API_BASE_URL || DEFAULT_API_BASE_URL)
 const RENDER_API_KEY = process.env.SHAPEWORDS_RENDER_API_KEY || process.env.SHAPEWORDS_API_KEY || ''
@@ -38,6 +38,7 @@ const CANVAS_RENDER_DEFAULTS = Object.freeze({
   returnLayout: true,
   shapeType: 'cloud',
   maxWords: 700,
+  seed: 0,
   fontFamily: 'Montserrat',
   minFontSize: 18,
   maxFontSize: 96,
@@ -57,6 +58,7 @@ const API_RENDER_DEFAULTS = Object.freeze({
   returnLayout: true,
   shapeType: 'circle',
   maxWords: 120,
+  seed: 0,
 })
 const RENDER_OPTION_KEYS = [
   'locale',
@@ -69,6 +71,7 @@ const RENDER_OPTION_KEYS = [
   'returnLayout',
   'shapeType',
   'maxWords',
+  'seed',
   'fontFamily',
   'minFontSize',
   'maxFontSize',
@@ -122,6 +125,7 @@ const renderOptionsShape = {
   shapeType: z.string().min(1).max(80).optional().describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond, custom. Canvas-profile default: cloud.'),
   customShapeDefinition: customShapeDefinitionSchema.describe('Custom SVG shape definition used when shapeType is custom.'),
   maxWords: z.number().int().min(1).max(1000).optional().describe('Maximum number of words to lay out. Canvas-profile default: 700.'),
+  seed: z.number().int().min(0).max(0xffffffff).optional().describe('Unsigned 32-bit layout seed for reproducible browserless ShapeWords renders. Canvas-profile default: 0. Use engine auto or browserless; browser fallback does not support non-zero seed.'),
   fontFamily: z.string().min(1).max(80).optional().describe('ShapeWords font family name. Canvas-profile default: Montserrat.'),
   minFontSize: z.number().int().min(4).max(400).optional(),
   maxFontSize: z.number().int().min(8).max(700).optional(),
