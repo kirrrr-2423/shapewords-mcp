@@ -1,6 +1,6 @@
 {
   "name": "shapewords-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Universal MCP server for generating ShapeWords word clouds.",
   "type": "module",
   "bin": {

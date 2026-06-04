@@ -19,7 +19,7 @@ if (stderr) {
 
 const client = new Client({
   name: 'shapewords-mcp-smoke',
-  version: '0.1.0',
+  version: '0.2.0',
 })
 
 try {

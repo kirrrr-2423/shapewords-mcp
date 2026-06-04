@@ -5,13 +5,82 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { setTimeout as delay } from 'node:timers/promises'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 const DEFAULT_API_BASE_URL = 'https://shapewords.fun'
 const API_BASE_URL = stripTrailingSlash(process.env.SHAPEWORDS_API_BASE_URL || DEFAULT_API_BASE_URL)
 const RENDER_API_KEY = process.env.SHAPEWORDS_RENDER_API_KEY || process.env.SHAPEWORDS_API_KEY || ''
 const POLL_INTERVAL_MS = readPositiveInteger(process.env.SHAPEWORDS_POLL_INTERVAL_MS, 1500)
 const POLL_TIMEOUT_MS = readPositiveInteger(process.env.SHAPEWORDS_POLL_TIMEOUT_MS, 90_000)
 const MAX_IMAGE_BYTES = readPositiveInteger(process.env.SHAPEWORDS_MAX_IMAGE_BYTES, 8 * 1024 * 1024)
+const ROTATION_PRESET_VALUES = [
+  'horizontal',
+  'vertical',
+  'orthogonal',
+  'crossing',
+  'crossingVoids',
+  'dancing',
+  'positiveSlope',
+  'negativeSlope',
+  'random',
+  'custom',
+  'mixed',
+  'angled',
+  'free',
+]
+const CANVAS_RENDER_DEFAULTS = Object.freeze({
+  locale: 'en',
+  format: 'svg',
+  width: 800,
+  height: 600,
+  background: 'white',
+  quality: 'hq',
+  engine: 'auto',
+  returnLayout: true,
+  shapeType: 'cloud',
+  maxWords: 700,
+  fontFamily: 'Montserrat',
+  minFontSize: 18,
+  maxFontSize: 96,
+  padding: 3,
+  rotationPreset: 'orthogonal',
+  spiralType: 'archimedean',
+  fillMode: 'fill',
+})
+const API_RENDER_DEFAULTS = Object.freeze({
+  locale: 'en',
+  format: 'svg',
+  width: 1024,
+  height: 640,
+  background: 'white',
+  quality: 'sq',
+  engine: 'auto',
+  returnLayout: true,
+  shapeType: 'circle',
+  maxWords: 120,
+})
+const RENDER_OPTION_KEYS = [
+  'locale',
+  'format',
+  'width',
+  'height',
+  'background',
+  'quality',
+  'engine',
+  'returnLayout',
+  'shapeType',
+  'maxWords',
+  'fontFamily',
+  'minFontSize',
+  'maxFontSize',
+  'palette',
+  'colorMode',
+  'customShapeDefinition',
+  'padding',
+  'rotationPreset',
+  'rotations',
+  'spiralType',
+  'fillMode',
+]
 
 const localeSchema = z.enum(['en', 'ru', 'ar', 'es', 'fr', 'zh'])
 const formatSchema = z.enum(['png', 'svg', 'json'])
@@ -19,6 +88,17 @@ const backgroundSchema = z.enum(['transparent', 'white', 'dark'])
 const qualitySchema = z.enum(['sq', 'hq'])
 const colorModeSchema = z.enum(['sequential', 'random', 'byFrequency'])
 const engineSchema = z.enum(['auto', 'browser', 'browserless'])
+const renderProfileSchema = z.enum(['canvas', 'api'])
+const fillModeSchema = z.enum(['fill', 'frequency'])
+const spiralTypeSchema = z.enum(['archimedean', 'rectangular'])
+const rotationPresetSchema = z.enum(ROTATION_PRESET_VALUES)
+const wordItemSchema = z.object({
+  text: z.string().min(1).max(120),
+  value: z.number().int().min(1).max(100_000).default(1),
+  kind: z.enum(['word', 'emoji']).optional(),
+  sizeScale: z.number().min(0.1).max(5).optional(),
+  repeat: z.boolean().default(true),
+})
 const customShapeDefinitionSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   nameEn: z.string().min(1).max(80).optional(),
@@ -28,23 +108,30 @@ const customShapeDefinitionSchema = z.object({
 }).optional()
 
 const renderOptionsShape = {
-  text: z.string().min(1).max(100_000).describe('Words, phrases, notes, or source text for the word cloud.'),
-  locale: localeSchema.default('en').describe('ShapeWords UI/render locale.'),
-  format: formatSchema.default('svg').describe('Output artifact format. SVG is the fastest MCP default; PNG uses the browser fallback.'),
-  width: z.number().int().min(240).max(4096).default(1024).describe('Canvas width in pixels.'),
-  height: z.number().int().min(240).max(4096).default(640).describe('Canvas height in pixels.'),
-  background: backgroundSchema.default('white').describe('Output background style.'),
-  quality: qualitySchema.default('sq').describe('sq is faster, hq renders at higher device scale.'),
-  engine: engineSchema.default('auto').describe('Renderer engine. auto uses browserless for SVG/JSON and browser fallback for PNG.'),
-  returnLayout: z.boolean().default(true).describe('Ask the Render API to include layout JSON when supported.'),
-  shapeType: z.string().min(1).max(80).default('circle').describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond, custom.'),
+  renderProfile: renderProfileSchema.default('canvas').describe('Default option profile. canvas matches the main ShapeWords canvas; api keeps the older compact Render API defaults.'),
+  text: z.string().min(1).max(100_000).optional().describe('Words, phrases, notes, or source text for the word cloud. Optional when words[] is provided.'),
+  words: z.array(wordItemSchema).min(1).max(1000).optional().describe('Explicit weighted words. Use this when another system already tokenized, lemmatized, or scored the input.'),
+  locale: localeSchema.optional().describe('ShapeWords UI/render locale. Canvas-profile default: en.'),
+  format: formatSchema.optional().describe('Output artifact format. Canvas-profile default: svg.'),
+  width: z.number().int().min(240).max(4096).optional().describe('Canvas width in pixels. Canvas-profile default: 800.'),
+  height: z.number().int().min(240).max(4096).optional().describe('Canvas height in pixels. Canvas-profile default: 600.'),
+  background: backgroundSchema.optional().describe('Output background style. Canvas-profile default: white.'),
+  quality: qualitySchema.optional().describe('sq is faster, hq renders at higher device scale. Canvas-profile default: hq.'),
+  engine: engineSchema.optional().describe('Renderer engine. auto uses the browserless shared-core renderer for supported formats.'),
+  returnLayout: z.boolean().optional().describe('Ask the Render API to include layout JSON when supported. Canvas-profile default: true.'),
+  shapeType: z.string().min(1).max(80).optional().describe('ShapeWords shape id, for example circle, rectangle, heart, star, cloud, diamond, custom. Canvas-profile default: cloud.'),
   customShapeDefinition: customShapeDefinitionSchema.describe('Custom SVG shape definition used when shapeType is custom.'),
-  maxWords: z.number().int().min(1).max(1000).default(120).describe('Maximum number of words to lay out.'),
-  fontFamily: z.string().min(1).max(80).optional().describe('Optional ShapeWords font family name.'),
+  maxWords: z.number().int().min(1).max(1000).optional().describe('Maximum number of words to lay out. Canvas-profile default: 700.'),
+  fontFamily: z.string().min(1).max(80).optional().describe('ShapeWords font family name. Canvas-profile default: Montserrat.'),
   minFontSize: z.number().int().min(4).max(400).optional(),
   maxFontSize: z.number().int().min(8).max(700).optional(),
   palette: z.array(z.string().regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/iu)).max(12).optional(),
   colorMode: colorModeSchema.optional(),
+  padding: z.number().int().min(0).max(100).optional().describe('Word collision padding in pixels. Canvas-profile default: 3.'),
+  rotationPreset: rotationPresetSchema.optional().describe('Rotation preset matching the ShapeWords canvas. Canvas-profile default: orthogonal.'),
+  rotations: z.array(z.number().int().min(-90).max(90)).min(1).max(64).optional().describe('Explicit rotation angles in degrees. When provided, these override rotationPreset.'),
+  spiralType: spiralTypeSchema.optional().describe('Placement spiral algorithm. Canvas-profile default: archimedean.'),
+  fillMode: fillModeSchema.optional().describe('Shape filling strategy. Canvas-profile default: fill.'),
 }
 
 const server = new McpServer({
@@ -71,12 +158,14 @@ server.registerTool(
     },
   },
   async (input) => {
-    const job = await createRenderJob(toRenderPayload(input))
+    const payload = toRenderPayload(input)
+    const job = await createRenderJob(payload)
     const completedJob = await waitForRenderJob(job, {
       pollIntervalMs: input.pollIntervalMs || POLL_INTERVAL_MS,
       pollTimeoutMs: input.pollTimeoutMs || POLL_TIMEOUT_MS,
     })
     const artifactUrl = getArtifactUrl(completedJob)
+    const artifactFormat = payload.options.format
     const structuredContent = {
       job: completedJob,
       artifactUrl,
@@ -89,13 +178,13 @@ server.registerTool(
         text: [
           `ShapeWords render completed: ${completedJob.id}`,
           `Artifact URL: ${artifactUrl}`,
-          `Format: ${input.format || 'png'}`,
+          `Format: ${artifactFormat}`,
         ].join('\n'),
       },
     ]
 
     if (input.returnImage) {
-      if (!['png', 'svg'].includes(input.format || 'svg')) {
+      if (!['png', 'svg'].includes(artifactFormat)) {
         throw new Error('returnImage is supported only for png and svg formats.')
       }
       const image = await fetchArtifactAsImageContent(artifactUrl)
@@ -120,7 +209,8 @@ server.registerTool(
     },
   },
   async (input) => {
-    const job = await createRenderJob(toRenderPayload(input))
+    const payload = toRenderPayload(input)
+    const job = await createRenderJob(payload)
     const artifactUrl = getArtifactUrl(job)
     return {
       content: [
@@ -183,25 +273,33 @@ main().catch((error) => {
 })
 
 function toRenderPayload(input) {
+  const renderProfile = input.renderProfile === 'api' ? 'api' : 'canvas'
   const options = {
-    locale: input.locale || 'en',
-    format: input.format || 'svg',
-    width: input.width || 1024,
-    height: input.height || 640,
-    background: input.background || 'white',
-    quality: input.quality || 'sq',
-    shapeType: input.shapeType || 'circle',
-    maxWords: input.maxWords || 120,
-    engine: input.engine || 'auto',
-    returnLayout: input.returnLayout !== false,
+    ...(renderProfile === 'api' ? API_RENDER_DEFAULTS : CANVAS_RENDER_DEFAULTS),
   }
 
-  for (const key of ['fontFamily', 'minFontSize', 'maxFontSize', 'palette', 'colorMode', 'customShapeDefinition']) {
-    if (input[key] !== undefined) options[key] = input[key]
+  for (const key of RENDER_OPTION_KEYS) {
+    if (input[key] !== undefined) {
+      options[key] = input[key]
+    }
+  }
+
+  if (Array.isArray(input.rotations) && input.rotations.length > 0 && input.rotationPreset === undefined) {
+    delete options.rotationPreset
+  }
+
+  const text = typeof input.text === 'string' && input.text.trim() ? input.text : ''
+  const words = Array.isArray(input.words) ? input.words : []
+
+  if (!text && words.length === 0) {
+    throw new Error('Provide either text or words[] for ShapeWords rendering.')
   }
 
   return {
-    input: { text: input.text },
+    input: {
+      ...(text ? { text } : {}),
+      ...(words.length ? { words } : {}),
+    },
     options,
   }
 }

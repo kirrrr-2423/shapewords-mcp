@@ -36,21 +36,28 @@ Use this tool with the `jobId` returned by `create_word_cloud_job` or `render_wo
 
 | Field | Type | Default | Limits | Description |
 | --- | --- | --- | --- | --- |
-| `text` | string | required | 1-100,000 chars | Source text for the word cloud. Can be prose, notes, prompts, repeated words, keyword lists, or agent output. |
+| `renderProfile` | enum | `canvas` | `canvas`, `api` | Default option profile. `canvas` matches the main ShapeWords canvas; `api` keeps the older compact Render API defaults. |
+| `text` | string | optional | 1-100,000 chars | Source text for the word cloud. Required unless `words` is provided. |
+| `words` | object[] | optional | 1-1000 items | Explicit weighted words. Use when the caller already tokenized, lemmatized, or scored text. |
 | `locale` | enum | `en` | `en`, `ru`, `ar`, `es`, `fr`, `zh` | Render/UI locale passed to ShapeWords. |
-| `format` | enum | `svg` | `svg`, `png`, `json` | Artifact format. SVG is the fastest default. JSON returns layout data. PNG uses the browser renderer. |
-| `width` | integer | `1024` | 240-4096 | Canvas width in pixels. |
-| `height` | integer | `640` | 240-4096 | Canvas height in pixels. |
+| `format` | enum | `svg` | `svg`, `png`, `json` | Artifact format. SVG is the fastest default. JSON returns layout data. PNG is rasterized from the same shared layout. |
+| `width` | integer | `800` | 240-4096 | Canvas width in pixels. |
+| `height` | integer | `600` | 240-4096 | Canvas height in pixels. |
 | `background` | enum | `white` | `transparent`, `white`, `dark` | Output background. |
-| `quality` | enum | `sq` | `sq`, `hq` | Standard or high-quality render. `hq` is slower. |
-| `engine` | enum | `auto` | `auto`, `browser`, `browserless` | Renderer engine. `auto` uses browserless for SVG/JSON when possible and browser for PNG. |
+| `quality` | enum | `hq` | `sq`, `hq` | Standard or high-quality render. `hq` matches the main canvas export scale and is slower. |
+| `engine` | enum | `auto` | `auto`, `browser`, `browserless` | Renderer engine. `auto` uses browserless shared-core when possible. |
 | `returnLayout` | boolean | `true` | true/false | Ask the Render API to include layout metadata when supported. |
-| `shapeType` | string | `circle` | 1-80 chars | Shape id. Use a built-in id or `custom` with `customShapeDefinition`. |
+| `shapeType` | string | `cloud` | 1-80 chars | Shape id. Use a built-in id or `custom` with `customShapeDefinition`. |
 | `customShapeDefinition` | object | omitted | see below | Custom SVG path shape. Required when `shapeType` is `custom`. |
-| `maxWords` | integer | `120` | 1-1000 | Maximum number of words to place. |
-| `fontFamily` | string | service default | 1-80 chars | Optional ShapeWords font family name, for example `Inter`, `Roboto`, `Montserrat`, `Noto Sans`. |
-| `minFontSize` | integer | service default | 4-400 | Minimum word font size. |
-| `maxFontSize` | integer | service default | 8-700 | Maximum word font size. |
+| `maxWords` | integer | `700` | 1-1000 | Maximum number of words to place. |
+| `fontFamily` | string | `Montserrat` | 1-80 chars | ShapeWords font family name, for example `Inter`, `Roboto`, `Montserrat`, `Noto Sans`. |
+| `minFontSize` | integer | `18` | 4-400 | Minimum word font size. |
+| `maxFontSize` | integer | `96` | 8-700 | Maximum word font size. |
+| `padding` | integer | `3` | 0-100 | Pixel padding used by collision detection. |
+| `rotationPreset` | enum | `orthogonal` | see below | Rotation preset matching the main ShapeWords canvas. |
+| `rotations` | integer[] | omitted | -90 to 90, max 64 values | Explicit rotation angles. When provided, these override `rotationPreset`. |
+| `spiralType` | enum | `archimedean` | `archimedean`, `rectangular` | Placement spiral algorithm. |
+| `fillMode` | enum | `fill` | `fill`, `frequency` | Shape filling strategy. |
 | `palette` | string[] | service default | up to 12 colors | Hex colors: `#rgb`, `#rrggbb`, or `#rrggbbaa`. |
 | `colorMode` | enum | service default | `sequential`, `random`, `byFrequency` | How palette colors are assigned to words. |
 | `returnImage` | boolean | `false` | `render_word_cloud` only | Download the finished SVG/PNG artifact and return it as MCP image content. |
@@ -63,13 +70,35 @@ Use this tool with the `jobId` returned by `create_word_cloud_job` or `render_wo
 | --- | --- | --- | --- |
 | `jobId` | string | 6-64 chars | ShapeWords render job id. |
 
+`words` items use this shape:
+
+| Field | Type | Default | Limits | Description |
+| --- | --- | --- | --- | --- |
+| `text` | string | required | 1-120 chars | Display word or emoji. |
+| `value` | integer | `1` | 1-100,000 | Weight/frequency used for sizing. |
+| `kind` | enum | `word` | `word`, `emoji` | Word type. Emoji are kept horizontal by the renderer. |
+| `sizeScale` | number | omitted | 0.1-5 | Optional extra size multiplier used by the ShapeWords layout core when available. |
+| `repeat` | boolean | `true` | true/false | Whether the layout may repeat this word to improve shape filling. |
+
+Rotation presets:
+
+```text
+horizontal, vertical, orthogonal, crossing, crossingVoids, dancing,
+positiveSlope, negativeSlope, random, custom, mixed, angled, free
+```
+
+`renderProfile: "canvas"` sends the same practical defaults as the main editor canvas: `shapeType: "cloud"`, `width: 800`, `height: 600`, `quality: "hq"`, `maxWords: 700`, `fontFamily: "Montserrat"`, `minFontSize: 18`, `maxFontSize: 96`, `padding: 3`, `rotationPreset: "orthogonal"`, `spiralType: "archimedean"`, and `fillMode: "fill"`.
+
+Use `renderProfile: "api"` only when you need the older compact Render API defaults: circle shape, 1024x640, SQ quality, and 120 max words.
+
 ## Text Input
 
-The MCP server sends `text` to ShapeWords as raw source text:
+The MCP server can send either raw `text`, explicit `words`, or both:
 
 - repeated words increase frequency, for example `cloud cloud cloud render render API`;
+- `words[]` preserves caller-provided weights and avoids differences in tokenization, stop words, or lemmatization;
+- when both `text` and `words[]` are present, ShapeWords renders from `words[]` and keeps `text` as source context;
 - paragraphs, meeting notes, workshop notes, prompts, research snippets, and keyword lists are valid;
-- explicit weighted word arrays are not part of the current MCP schema, so repeat words when you need stronger weighting;
 - files such as CSV, Excel, or Google Sheets are not uploaded through this MCP server; paste or generate the text content first.
 
 Example weighted text:
@@ -77,6 +106,22 @@ Example weighted text:
 ```json
 {
   "text": "MCP MCP MCP ShapeWords ShapeWords word cloud word cloud render API agents tools",
+  "shapeType": "cloud",
+  "format": "svg"
+}
+```
+
+Example explicit weighted words:
+
+```json
+{
+  "words": [
+    { "text": "ShapeWords", "value": 12 },
+    { "text": "MCP", "value": 9 },
+    { "text": "canvas", "value": 7 },
+    { "text": "layout", "value": 6 },
+    { "text": "render", "value": 5 }
+  ],
   "shapeType": "cloud",
   "format": "svg"
 }
@@ -154,11 +199,11 @@ Generated artifact URLs are short-lived because the ShapeWords Render API stores
 
 ## Format and Engine Notes
 
-- `svg` is the recommended automation format: it is fast, compact, and works with the browserless renderer.
-- `json` returns layout data and is supported by the browserless renderer.
-- `png` requires the browser renderer.
+- `svg` is the recommended automation format: it is fast, compact, and works with the browserless shared-core renderer.
+- `json` returns layout data from the same shared-core placement.
+- `png` is rasterized from the same generated SVG/layout, so word placement matches SVG/JSON for the same input and options.
 - `engine: "auto"` is recommended unless you need to force a specific path.
-- `engine: "browserless"` supports `svg` and `json`, not `png`.
+- `engine: "browserless"` supports `svg`, `json`, and `png`.
 - `engine: "browser"` supports `svg` and `png`, not `json`.
 
 ## Quick Start
@@ -226,7 +271,7 @@ For a local clone:
 ## Example Prompt
 
 ```text
-Create a fast SVG word cloud about MCP, universal tools, word cloud generation, AI agents, and ShapeWords. Use a circle shape and return the artifact URL.
+Create a fast SVG word cloud about MCP, universal tools, word cloud generation, AI agents, and ShapeWords. Use the default ShapeWords canvas profile and return the artifact URL.
 ```
 
 Example tool input:
@@ -236,13 +281,13 @@ Example tool input:
   "text": "MCP MCP MCP Model Context Protocol word cloud word cloud ShapeWords tools resources prompts stdio server client universal integration connector API render PNG SVG artifact agents automation context protocol schema",
   "locale": "en",
   "format": "svg",
-  "width": 1024,
-  "height": 640,
+  "width": 800,
+  "height": 600,
   "background": "white",
-  "quality": "sq",
+  "quality": "hq",
   "engine": "auto",
   "returnLayout": true,
-  "shapeType": "circle",
+  "shapeType": "cloud",
   "palette": ["#7c3aed", "#ddd6fe", "#14b8a6", "#111827"],
   "returnImage": false
 }
@@ -307,4 +352,4 @@ The server uses stdio and writes protocol messages to stdout. Diagnostics are wr
 - Set `returnImage: true` in `render_word_cloud` when the MCP client supports image content and needs the bytes inline.
 - For automation-heavy use, prefer SVG or JSON layout artifacts; request PNG only when the caller needs raster pixels.
 - The MCP schema currently exposes rendering and style options only. It does not expose ShapeWords UI-only workflows such as the advanced word editor, 2D/3D view switching, CSV/Excel upload, Google Sheets import, or live room controls.
-- Lower-level Render API knobs such as `padding`, `rotationPreset`, `rotations`, `spiralType`, and `fillMode` are not currently exposed by this MCP tool schema.
+- `padding`, `rotationPreset`, `rotations`, `spiralType`, and `fillMode` are exposed so MCP callers can match the main ShapeWords canvas more closely.
