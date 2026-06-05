@@ -17,6 +17,8 @@
   "scripts": {
     "start": "node src/index.js",
     "inspect": "npx @modelcontextprotocol/inspector node src/index.js",
+    "check": "node --check src/index.js && node --check src/localSkiaRenderer.js && node --check scripts/smoke-skia.mjs && node --check scripts/smoke.mjs",
+    "test": "npm run check && npm run smoke:skia",
     "smoke": "node scripts/smoke.mjs",
     "smoke:skia": "node scripts/smoke-skia.mjs"
   },
