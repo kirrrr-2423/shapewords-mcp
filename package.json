@@ -1,7 +1,8 @@
 {
   "name": "shapewords-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Universal MCP server for generating ShapeWords word clouds.",
+  "mcpName": "io.github.kirrrr-2423/shapewords-mcp",
   "type": "module",
   "bin": {
     "shapewords-mcp": "src/index.js"
@@ -9,6 +10,7 @@
   "files": [
     "LICENSE",
     "README.md",
+    "server.json",
     "THIRD_PARTY_NOTICES.txt",
     "scripts/smoke.mjs",
     "scripts/smoke-skia.mjs",

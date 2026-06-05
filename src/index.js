@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { setTimeout as delay } from 'node:timers/promises'
 import { renderLocalSkiaWordCloud } from './localSkiaRenderer.js'
 
-const VERSION = '0.2.1'
+const VERSION = '0.2.2'
 const DEFAULT_API_BASE_URL = 'https://shapewords.fun'
 const API_BASE_URL = stripTrailingSlash(process.env.SHAPEWORDS_API_BASE_URL || DEFAULT_API_BASE_URL)
 const RENDER_API_KEY = process.env.SHAPEWORDS_RENDER_API_KEY || process.env.SHAPEWORDS_API_KEY || ''

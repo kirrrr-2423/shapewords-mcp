@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.kirrrr-2423/shapewords-mcp",
+  "title": "ShapeWords MCP",
+  "description": "Generate ShapeWords word clouds as SVG, PNG, or JSON from text or weighted words.",
+  "version": "0.2.2",
+  "websiteUrl": "https://shapewords.fun/",
+  "repository": {
+    "source": "github",
+    "url": "https://github.com/kirrrr-2423/shapewords-mcp"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "shapewords-mcp",
+      "version": "0.2.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SHAPEWORDS_API_BASE_URL",
+          "description": "ShapeWords Render API base URL. Defaults to the public ShapeWords service.",
+          "default": "https://shapewords.fun",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "SHAPEWORDS_RENDER_API_KEY",
+          "description": "Optional bearer token for protected ShapeWords Render API deployments.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "SHAPEWORDS_POLL_TIMEOUT_MS",
+          "description": "Maximum time to wait for hosted render jobs, in milliseconds.",
+          "default": "90000",
+          "format": "number",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "SHAPEWORDS_REQUEST_TIMEOUT_MS",
+          "description": "Per-request timeout for ShapeWords API calls, in milliseconds.",
+          "default": "30000",
+          "format": "number",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
