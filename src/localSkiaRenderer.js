@@ -24,6 +24,7 @@ const DEFAULT_PADDING = 3
 const DEFAULT_SPIRAL_TYPE = 'archimedean'
 const DEFAULT_FILL_MODE = 'fill'
 const DEFAULT_ROTATIONS = [0, 90]
+const MAX_SKIA_OUTPUT_PIXELS = 40_000_000
 
 const ROTATION_PRESETS = {
   horizontal: [0],
@@ -161,6 +162,7 @@ export async function renderLocalSkiaWordCloud(payload) {
   const id = `local-skia-${randomUUID()}`
   const options = normalizeLocalOptions(payload.options || {})
   const shape = resolveShape(options)
+  validateSkiaSurfaceSize(options)
   const mask = createShapeMask(shape, options.width, options.height)
   if (!mask) throw new Error('Unable to create a local shape mask.')
 
@@ -583,7 +585,7 @@ function resolveLocalFontAssets(fontFamily) {
   if (normalized === 'opendyslexic' || normalized === 'open dyslexic') {
     return toLocalFontAssets(OPENDYSLEXIC_FONT_ASSETS)
   }
-  return undefined
+  throw new Error(`Local Skia renderer supports only Montserrat and OpenDyslexic fonts. Received: ${fontFamily}`)
 }
 
 function toLocalFontAssets(assets) {
@@ -654,7 +656,24 @@ function resolveShape(options) {
   }
 
   const shapeType = options.shapeType || 'circle'
-  return BASIC_SHAPES[shapeType] || FONT_AWESOME_SHAPES.get(shapeType) || BASIC_SHAPES.circle
+  const shape = BASIC_SHAPES[shapeType] || FONT_AWESOME_SHAPES.get(shapeType)
+  if (!shape) {
+    throw new Error(`Local Skia renderer does not support shapeType "${shapeType}". Use a supported local shape or provide customShapeDefinition.`)
+  }
+  return shape
+}
+
+function validateSkiaSurfaceSize(options) {
+  if (options.format !== 'png') return
+  const scale = options.quality === 'hq' ? 4 : 2
+  const outputWidth = Math.max(1, Math.round(options.width * scale))
+  const outputHeight = Math.max(1, Math.round(options.height * scale))
+  const pixels = outputWidth * outputHeight
+  if (pixels > MAX_SKIA_OUTPUT_PIXELS) {
+    throw new Error(
+      `Local Skia PNG would allocate ${outputWidth}x${outputHeight} (${pixels} pixels), above the ${MAX_SKIA_OUTPUT_PIXELS} pixel limit. Lower width/height or use quality: "sq".`,
+    )
+  }
 }
 
 function createShapeMask(shape, width, height) {

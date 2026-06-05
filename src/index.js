@@ -12,6 +12,7 @@ const API_BASE_URL = stripTrailingSlash(process.env.SHAPEWORDS_API_BASE_URL || D
 const RENDER_API_KEY = process.env.SHAPEWORDS_RENDER_API_KEY || process.env.SHAPEWORDS_API_KEY || ''
 const POLL_INTERVAL_MS = readPositiveInteger(process.env.SHAPEWORDS_POLL_INTERVAL_MS, 1500)
 const POLL_TIMEOUT_MS = readPositiveInteger(process.env.SHAPEWORDS_POLL_TIMEOUT_MS, 90_000)
+const REQUEST_TIMEOUT_MS = readPositiveInteger(process.env.SHAPEWORDS_REQUEST_TIMEOUT_MS, 30_000)
 const MAX_IMAGE_BYTES = readPositiveInteger(process.env.SHAPEWORDS_MAX_IMAGE_BYTES, 8 * 1024 * 1024)
 const ROTATION_PRESET_VALUES = [
   'horizontal',
@@ -319,7 +320,12 @@ async function renderLocalSkiaTool(input, payload) {
     },
   ]
 
-  if (['png', 'svg'].includes(artifactFormat)) {
+  if (artifactFormat === 'json') {
+    content.push({
+      type: 'text',
+      text: rendered.artifact.text,
+    })
+  } else if (['png', 'svg'].includes(artifactFormat)) {
     content.push(artifactToImageContent(rendered.artifact))
   } else if (input.returnImage) {
     throw new Error('returnImage is supported only for png and svg formats.')
@@ -396,8 +402,9 @@ async function waitForRenderJob(initialJob, options) {
 }
 
 async function fetchArtifactAsImageContent(url) {
-  const response = await fetch(url, {
-    headers: RENDER_API_KEY ? { Authorization: `Bearer ${RENDER_API_KEY}` } : undefined,
+  const sameOrigin = isSameApiOrigin(url)
+  const response = await fetchWithTimeout(url, {
+    headers: sameOrigin && RENDER_API_KEY ? { Authorization: `Bearer ${RENDER_API_KEY}` } : undefined,
   })
   if (!response.ok) {
     throw new Error(`Artifact download failed with HTTP ${response.status}.`)
@@ -431,7 +438,7 @@ function artifactToImageContent(artifact) {
 
 async function fetchJson(path, options) {
   const url = absoluteUrl(path)
-  const response = await fetch(url, options)
+  const response = await fetchWithTimeout(url, options)
   const text = await response.text()
   const data = text ? parseJson(text, url) : {}
 
@@ -454,7 +461,7 @@ function normalizeJob(payload) {
     createdAt: job.createdAt || payload.createdAt,
     updatedAt: job.updatedAt || payload.updatedAt,
     statusUrl: absoluteUrl(job.statusUrl || payload.statusUrl || `/api/render/wordcloud/${id}`),
-    resultUrl: job.resultUrl ? absoluteUrl(job.resultUrl) : null,
+    resultUrl: job.resultUrl ? safeApiUrl(job.resultUrl, 'resultUrl') : null,
     error: job.error || payload.error || null,
     result: job.result || payload.result || null,
     metrics: job.metrics || payload.metrics || null,
@@ -476,6 +483,40 @@ function renderHeaders(includeBodyHeaders = true) {
 
 function absoluteUrl(pathOrUrl) {
   return new URL(pathOrUrl, `${API_BASE_URL}/`).toString()
+}
+
+function safeApiUrl(pathOrUrl, label = 'url') {
+  const url = new URL(pathOrUrl, `${API_BASE_URL}/`)
+  if (url.origin !== new URL(API_BASE_URL).origin) {
+    throw new Error(`ShapeWords API returned cross-origin ${label}: ${url.origin}`)
+  }
+  return url.toString()
+}
+
+function isSameApiOrigin(pathOrUrl) {
+  try {
+    return new URL(pathOrUrl, `${API_BASE_URL}/`).origin === new URL(API_BASE_URL).origin
+  } catch {
+    return false
+  }
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal,
+    })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`ShapeWords request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function stripTrailingSlash(value) {

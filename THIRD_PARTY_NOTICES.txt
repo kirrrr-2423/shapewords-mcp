@@ -1,0 +1,23 @@
+Font Awesome Free
+Copyright 2026 Fonticons, Inc. (https://fontawesome.com)
+Source: https://fontawesome.com
+License: https://fontawesome.com/license/free
+
+The bundled Font Awesome shape SVG paths are generated from Font Awesome Free
+icons. Font Awesome Free icons are licensed under Creative Commons Attribution
+4.0 International.
+
+Montserrat
+Source: https://fonts.google.com/specimen/Montserrat
+License: SIL Open Font License 1.1
+
+The bundled Montserrat WOFF2 files are distributed under the SIL Open Font
+License 1.1.
+
+OpenDyslexic
+Copyright (c) 2019-07-29, Abbie Gonzalez (https://abbiecod.es)
+Source: https://fontsource.org/fonts/opendyslexic
+License: SIL Open Font License 1.1
+
+The bundled OpenDyslexic WOFF2 files are distributed under the SIL Open Font
+License 1.1 and are sourced from @fontsource/opendyslexic.

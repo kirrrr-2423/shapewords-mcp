@@ -155,7 +155,7 @@ brand-airtable, brand-replit, brand-anthropic
 
 The production renderer may also accept additional generated ShapeWords ids. For portable automation, prefer the stable ids above or pass a custom SVG shape.
 
-The local `engine: "skia"` path currently supports `rectangle`, `square`, `circle`, `diamond`, `triangle`, `star`, `heart`, `cloud`, custom SVG shapes, and vendored Font Awesome shape ids such as `fa-cat`. Unsupported shape ids fall back to `circle` locally.
+The local `engine: "skia"` path currently supports `rectangle`, `square`, `circle`, `diamond`, `triangle`, `star`, `heart`, `cloud`, custom SVG shapes, and vendored Font Awesome shape ids such as `fa-cat`. Unsupported local shape ids are rejected instead of silently changing the requested shape.
 
 ### Custom Shapes
 
@@ -276,6 +276,7 @@ For a local clone:
 | `SHAPEWORDS_API_KEY` | empty | Backward-compatible alias for `SHAPEWORDS_RENDER_API_KEY`. |
 | `SHAPEWORDS_POLL_INTERVAL_MS` | `1500` | Polling interval for completed renders. |
 | `SHAPEWORDS_POLL_TIMEOUT_MS` | `90000` | Render wait timeout. |
+| `SHAPEWORDS_REQUEST_TIMEOUT_MS` | `30000` | Per-request timeout for hosted API and artifact requests. |
 | `SHAPEWORDS_MAX_IMAGE_BYTES` | `8388608` | Max downloaded artifact size when `returnImage` is true. |
 
 ## Example Prompt
@@ -401,5 +402,9 @@ The server uses stdio and writes protocol messages to stdout. Diagnostics are wr
 - Set `returnImage: true` in `render_word_cloud` when the MCP client supports image content and needs hosted-render bytes inline. Local Skia image renders are inline automatically.
 - For automation-heavy use, prefer SVG or JSON layout artifacts; request PNG only when the caller needs raster pixels.
 - Set `seed` when the caller needs repeatable SVG/JSON/PNG placement across MCP runs. `engine: "skia"` is deterministic by default.
+- Local Skia PNG output is capped at 40,000,000 pixels after quality scaling to avoid excessive local memory use.
+- Local Skia font rendering currently supports bundled `Montserrat` and `OpenDyslexic` only. Hosted renders may support more font families.
 - The MCP schema currently exposes rendering and style options only. It does not expose ShapeWords UI-only workflows such as the advanced word editor, 2D/3D view switching, CSV/Excel upload, Google Sheets import, or live room controls.
 - `padding`, `rotationPreset`, `rotations`, `spiralType`, and `fillMode` are exposed so MCP callers can match the main ShapeWords canvas more closely.
+
+See `THIRD_PARTY_NOTICES.txt` for bundled Font Awesome and font asset notices.
